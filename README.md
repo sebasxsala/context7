@@ -114,6 +114,8 @@ You can also set env vars and avoid passing proxy flags every time:
 - `RATE_LIMIT_MAX_REQUESTS=120`
 - `RATE_LIMIT_WINDOW_SECONDS=60`
 
+`context7-mcp` auto-loads `.env` / `.env.local` from your current project directory.
+
 Upstream project reference: https://github.com/upstash/context7
 
 ## Important Tips
