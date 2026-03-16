@@ -1,0 +1,27 @@
+{
+  "name": "context7-mcp-cloudflare-cache-proxy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "kv:list": "wrangler kv:key list --binding=CONTEXT7_KV",
+    "kv:get": "wrangler kv:key get --binding=CONTEXT7_KV",
+    "kv:delete": "wrangler kv:key delete --binding=CONTEXT7_KV",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:check": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260314.0",
+    "@types/node": "^25.0.3",
+    "typescript": "^5.8.2",
+    "vitest": "^4.0.13",
+    "wrangler": "^4.57.1"
+  }
+}

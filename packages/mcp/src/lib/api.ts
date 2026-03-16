@@ -3,6 +3,14 @@ import { ClientContext, generateHeaders } from "./encryption.js";
 import { ProxyAgent, setGlobalDispatcher } from "undici";
 import { CONTEXT7_API_BASE_URL } from "./constants.js";
 
+const CONTEXT7_CACHE_PROXY_URL: string | null =
+  process.env.CONTEXT7_PROXY_URL ?? process.env.PROXY_URL ?? null;
+
+const CONTEXT7_CACHE_PROXY_KEY: string | null =
+  process.env.CONTEXT7_PROXY_KEY ?? process.env.PROXY_KEY ?? process.env.CACHE_KEY ?? null;
+
+const DEFAULT_PROXY_PROVIDER = process.env.CONTEXT7_PROXY_PROVIDER ?? "cloudflare";
+
 /**
  * Parses error response from the Context7 API
  * Extracts the server's error message, falling back to status-based messages if parsing fails
@@ -53,6 +61,74 @@ if (PROXY_URL && !PROXY_URL.startsWith("$") && /^(http|https):\/\//i.test(PROXY_
   }
 }
 
+function isValidHttpUrl(value: string | undefined | null): value is string {
+  if (!value || value.startsWith("$")) {
+    return false;
+  }
+  return /^(http|https):\/\//i.test(value);
+}
+
+function appendPathToBaseUrl(baseUrl: string, endpointPath: string): URL {
+  const url = new URL(baseUrl);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  const endpoint = endpointPath.replace(/^\/+/, "");
+  const path = `${basePath}/${endpoint}`.replace(/\/+/g, "/");
+
+  url.pathname = path.startsWith("/") ? path : `/${path}`;
+  url.search = "";
+  url.hash = "";
+
+  return url;
+}
+
+function buildRequestUrl(
+  endpointPath: string,
+  queryParams: Record<string, string>,
+  context: ClientContext
+): { url: URL; usingCacheProxy: boolean } {
+  const proxyUrl = isValidHttpUrl(context.proxyUrl)
+    ? context.proxyUrl
+    : isValidHttpUrl(CONTEXT7_CACHE_PROXY_URL)
+      ? CONTEXT7_CACHE_PROXY_URL
+      : undefined;
+
+  const usingCacheProxy = Boolean(proxyUrl);
+  const targetBaseUrl = proxyUrl ?? CONTEXT7_API_BASE_URL;
+  const url = appendPathToBaseUrl(targetBaseUrl, endpointPath);
+
+  for (const [key, value] of Object.entries(queryParams)) {
+    url.searchParams.set(key, value);
+  }
+
+  return { url, usingCacheProxy };
+}
+
+function withProxyHeaders(
+  headers: Record<string, string>,
+  context: ClientContext,
+  usingCacheProxy: boolean
+): Record<string, string> {
+  if (!usingCacheProxy) {
+    return headers;
+  }
+
+  const provider = (context.proxyProvider ?? DEFAULT_PROXY_PROVIDER).trim().toLowerCase();
+  const proxyKey = context.proxyKey ?? CONTEXT7_CACHE_PROXY_KEY;
+
+  headers["X-Context7-Proxy-Provider"] = provider;
+
+  switch (provider) {
+    case "none":
+      return headers;
+    case "cloudflare":
+    default:
+      if (proxyKey) {
+        headers["X-Context7-Proxy-Key"] = proxyKey;
+      }
+      return headers;
+  }
+}
+
 /**
  * Searches for libraries matching the given query
  * @param query The user's question or task (used for LLM relevance ranking)
@@ -66,11 +142,13 @@ export async function searchLibraries(
   context: ClientContext = {}
 ): Promise<SearchResponse> {
   try {
-    const url = new URL(`${CONTEXT7_API_BASE_URL}/v2/libs/search`);
-    url.searchParams.set("query", query);
-    url.searchParams.set("libraryName", libraryName);
+    const { url, usingCacheProxy } = buildRequestUrl(
+      "v2/libs/search",
+      { query, libraryName },
+      context
+    );
 
-    const headers = generateHeaders(context);
+    const headers = withProxyHeaders(generateHeaders(context), context, usingCacheProxy);
 
     const response = await fetch(url, { headers });
     if (!response.ok) {
@@ -98,11 +176,19 @@ export async function fetchLibraryContext(
   context: ClientContext = {}
 ): Promise<ContextResponse> {
   try {
-    const url = new URL(`${CONTEXT7_API_BASE_URL}/v2/context`);
-    url.searchParams.set("query", request.query);
-    url.searchParams.set("libraryId", request.libraryId);
+    const responseType = request.type === "json" ? "json" : "txt";
 
-    const headers = generateHeaders(context);
+    const { url, usingCacheProxy } = buildRequestUrl(
+      "v2/context",
+      {
+        query: request.query,
+        libraryId: request.libraryId,
+        type: responseType,
+      },
+      context
+    );
+
+    const headers = withProxyHeaders(generateHeaders(context), context, usingCacheProxy);
 
     const response = await fetch(url, { headers });
     if (!response.ok) {

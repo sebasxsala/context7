@@ -1314,12 +1314,13 @@ See the [Emdash repository](https://github.com/generalaction/emdash) for more in
 Context7 MCP provides the following tools that LLMs can use:
 
 - `resolve-library-id`: Resolves a general library name into a Context7-compatible library ID.
+  - `query` (required): User query used to rank matches by relevance
   - `libraryName` (required): The name of the library to search for
 
-- `get-library-docs`: Fetches documentation for a library using a Context7-compatible library ID.
-  - `context7CompatibleLibraryID` (required): Exact Context7-compatible library ID (e.g., `/mongodb/docs`, `/vercel/next.js`)
-  - `topic` (optional): Focus the docs on a specific topic (e.g., "routing", "hooks")
-  - `page` (optional, default 1): Page number for pagination (1-10). If the context is not sufficient, try page=2, page=3, etc. with the same topic.
+- `query-docs`: Fetches Context7 v2 API documentation for a library ID.
+  - `libraryId` (required): Exact Context7-compatible library ID (e.g., `/mongodb/docs`, `/vercel/next.js`)
+  - `query` (required): Question/task to retrieve relevant docs
+  - `type` (optional): Response format (`txt` or `json`, default `txt`)
 
 ## 🛟 Tips
 
@@ -1368,6 +1369,9 @@ bun run dist/index.js
 - `--transport <stdio|http>` – Transport to use (`stdio` by default). Use `http` for remote HTTP server or `stdio` for local integration.
 - `--port <number>` – Port to listen on when using `http` transport (default `3000`).
 - `--api-key <key>` – API key for authentication (or set `CONTEXT7_API_KEY` env var). You can get your API key by creating an account at [context7.com/dashboard](https://context7.com/dashboard).
+- `--proxy-url <url>` – Optional cache/proxy URL (for example a Cloudflare Worker URL). When set, MCP calls the proxy first for `/v2/libs/search` and `/v2/context`.
+- `--proxy-key <key>` – Optional key sent to the cache/proxy as `X-Context7-Proxy-Key` (or set `CONTEXT7_PROXY_KEY` env var).
+- `--proxy-provider <provider>` – Optional cache strategy provider (`cloudflare` by default). This is abstracted so future providers (e.g. Vercel, Deno) can be added without changing the MCP tool interface.
 
 Example with HTTP transport and port 8080:
 
@@ -1396,7 +1400,37 @@ You can use the `CONTEXT7_API_KEY` environment variable instead of passing the `
 ```bash
 # .env
 CONTEXT7_API_KEY=your_api_key_here
+CONTEXT7_PROXY_URL=https://your-worker.workers.dev
+CONTEXT7_PROXY_KEY=your_proxy_or_cache_key_here
+CONTEXT7_PROXY_PROVIDER=cloudflare
 ```
+
+The proxy key also supports `PROXY_KEY` and `CACHE_KEY` aliases for compatibility with existing setups.
+
+For a fork-friendly setup, use:
+
+- `packages/mcp/.env.example` -> copy to `.env` for MCP env vars
+- `packages/mcp/cache-proxy/cloudflare/wrangler.sample.json` -> copy to `wrangler.json`
+- `packages/mcp/cache-proxy/cloudflare/.env.example` -> copy to `.env` for worker local defaults
+
+Rate limit variables for the worker are also included in the samples:
+
+- `RATE_LIMIT_ENABLED` (default `true`)
+- `RATE_LIMIT_MAX_REQUESTS` (default `120`)
+- `RATE_LIMIT_WINDOW_SECONDS` (default `60`)
+
+### Cloudflare Worker Template (KV + Cache API)
+
+A Cloudflare Worker cache proxy template is available at:
+
+- `packages/mcp/cache-proxy/cloudflare`
+
+It includes:
+
+- `wrangler.sample.json` (no hardcoded IDs)
+- dual-layer cache implementation (Cache API first, KV second)
+- configurable KV-backed rate limiting
+- scripts for deploy/dev/tail/KV operations/tests
 
 **Example MCP configuration using environment variable:**
 

@@ -31,6 +31,9 @@ function encryptClientIp(clientIp: string): string {
 export interface ClientContext {
   clientIp?: string;
   apiKey?: string;
+  proxyKey?: string;
+  proxyUrl?: string;
+  proxyProvider?: string;
   clientInfo?: {
     ide?: string;
     version?: string;

@@ -21,6 +21,15 @@ const program = new Command()
   .option("--transport <stdio|http>", "transport type", "stdio")
   .option("--port <number>", "port for HTTP transport", DEFAULT_PORT.toString())
   .option("--api-key <key>", "API key for authentication (or set CONTEXT7_API_KEY env var)")
+  .option(
+    "--proxy-key <key>",
+    "cache/proxy auth key for Cloudflare Worker (or set CONTEXT7_PROXY_KEY env var)"
+  )
+  .option("--proxy-url <url>", "cache/proxy URL (or set CONTEXT7_PROXY_URL / PROXY_URL env var)")
+  .option(
+    "--proxy-provider <provider>",
+    "cache/proxy provider strategy (default: cloudflare, or set CONTEXT7_PROXY_PROVIDER env var)"
+  )
   .allowUnknownOption() // let MCP Inspector / other wrappers pass through extra flags
   .parse(process.argv);
 
@@ -28,6 +37,9 @@ const cliOptions = program.opts<{
   transport: string;
   port: string;
   apiKey?: string;
+  proxyKey?: string;
+  proxyUrl?: string;
+  proxyProvider?: string;
 }>();
 
 // Validate transport option
@@ -68,6 +80,9 @@ const requestContext = new AsyncLocalStorage<ClientContext>();
 
 // Global state for stdio mode only
 let stdioApiKey: string | undefined;
+let stdioProxyKey: string | undefined;
+let stdioProxyUrl: string | undefined;
+let stdioProxyProvider: string | undefined;
 let stdioClientInfo: { ide?: string; version?: string } | undefined;
 
 /**
@@ -84,6 +99,9 @@ function getClientContext(): ClientContext {
   // stdio mode: use globals
   return {
     apiKey: stdioApiKey,
+    proxyKey: stdioProxyKey,
+    proxyUrl: stdioProxyUrl,
+    proxyProvider: stdioProxyProvider,
     clientInfo: stdioClientInfo,
     transport: "stdio",
   };
@@ -245,13 +263,19 @@ IMPORTANT: Do not call this tool more than 3 times per question. If you cannot f
         .describe(
           "The question or task you need help with. Be specific and include relevant details. Good: 'How to set up authentication with JWT in Express.js' or 'React useEffect cleanup function examples'. Bad: 'auth' or 'hooks'. The query is sent to the Context7 API for processing. Do not include any sensitive or confidential information such as API keys, passwords, credentials, personal data, or proprietary code in your query."
         ),
+      type: z
+        .enum(["txt", "json"])
+        .optional()
+        .describe(
+          "Optional response format for Context7 v2 context API. Use 'txt' (default) for plain text snippets or 'json' for structured code/info snippets."
+        ),
     },
     annotations: {
       readOnlyHint: true,
     },
   },
-  async ({ query, libraryId }) => {
-    const response = await fetchLibraryContext({ query, libraryId }, getClientContext());
+  async ({ query, libraryId, type }) => {
+    const response = await fetchLibraryContext({ query, libraryId, type }, getClientContext());
 
     return {
       content: [
@@ -278,7 +302,7 @@ async function main() {
       res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE");
       res.setHeader(
         "Access-Control-Allow-Headers",
-        "Content-Type, MCP-Session-Id, MCP-Protocol-Version, X-Context7-API-Key, Context7-API-Key, X-API-Key, Authorization"
+        "Content-Type, MCP-Session-Id, MCP-Protocol-Version, X-Context7-API-Key, Context7-API-Key, X-API-Key, Authorization, X-Context7-Proxy-Key, Context7-Proxy-Key, X-Context7-Cache-Key, Context7-Cache-Key, X-Proxy-Key"
       );
       res.setHeader("Access-Control-Expose-Headers", "MCP-Session-Id");
 
@@ -312,6 +336,19 @@ async function main() {
         extractHeaderValue(req.headers["x-api-key"]) ||
         extractHeaderValue(req.headers["context7_api_key"]) ||
         extractHeaderValue(req.headers["x_api_key"])
+      );
+    };
+
+    const extractProxyKey = (req: express.Request): string | undefined => {
+      return (
+        extractHeaderValue(req.headers["x-context7-proxy-key"]) ||
+        extractHeaderValue(req.headers["context7-proxy-key"]) ||
+        extractHeaderValue(req.headers["x-context7-cache-key"]) ||
+        extractHeaderValue(req.headers["context7-cache-key"]) ||
+        extractHeaderValue(req.headers["x-proxy-key"]) ||
+        process.env.CONTEXT7_PROXY_KEY ||
+        process.env.PROXY_KEY ||
+        process.env.CACHE_KEY
       );
     };
 
@@ -372,6 +409,14 @@ async function main() {
         const context: ClientContext = {
           clientIp: getClientIp(req),
           apiKey: apiKey,
+          proxyKey: extractProxyKey(req),
+          proxyUrl:
+            cliOptions.proxyUrl ||
+            process.env.CONTEXT7_PROXY_URL ||
+            process.env.PROXY_URL ||
+            undefined,
+          proxyProvider:
+            cliOptions.proxyProvider || process.env.CONTEXT7_PROXY_PROVIDER || undefined,
           clientInfo: extractClientInfoFromUserAgent(req.headers["user-agent"]),
           transport: "http",
         };
@@ -486,6 +531,15 @@ async function main() {
     startServer(initialPort);
   } else {
     stdioApiKey = cliOptions.apiKey || process.env.CONTEXT7_API_KEY;
+    stdioProxyKey =
+      cliOptions.proxyKey ||
+      process.env.CONTEXT7_PROXY_KEY ||
+      process.env.PROXY_KEY ||
+      process.env.CACHE_KEY;
+    stdioProxyUrl =
+      cliOptions.proxyUrl || process.env.CONTEXT7_PROXY_URL || process.env.PROXY_URL || undefined;
+    stdioProxyProvider =
+      cliOptions.proxyProvider || process.env.CONTEXT7_PROXY_PROVIDER || undefined;
     const transport = new StdioServerTransport();
 
     await server.connect(transport);

@@ -26,6 +26,7 @@ export type DocumentState = "initial" | "finalized" | "error" | "delete";
 export type ContextRequest = {
   query: string;
   libraryId: string;
+  type?: "txt" | "json";
 };
 
 export type ContextResponse = {

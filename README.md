@@ -56,6 +56,66 @@ Authenticates via OAuth, generates an API key, and installs the appropriate skil
 
 **[Manual Installation / Other Clients →](https://context7.com/docs/resources/all-clients)**
 
+## Self-hosted Cache Proxy (Fork-friendly)
+
+If you want full ownership (your own worker, your own keys, your own deploy), fork this repo and configure the MCP + Cloudflare cache proxy.
+
+This keeps the same Context7 API behavior. It only adds a cache layer before upstream Context7.
+
+The worker also includes configurable rate limiting with safe defaults.
+
+### Files to configure
+
+- `.env.example` -> copy to `.env` and set your values
+- `packages/mcp/cache-proxy/cloudflare/wrangler.sample.json` -> copy to `wrangler.json`
+- `packages/mcp/cache-proxy/cloudflare/.env.example` -> copy to `.env`
+
+### Deploy cache worker
+
+```bash
+cd packages/mcp/cache-proxy/cloudflare
+pnpm install --ignore-workspace
+pnpm wrangler secret put CONTEXT7_PROXY_KEY
+pnpm deploy
+```
+
+### OpenCode MCP config example
+
+```json
+{
+  "mcp": {
+    "context7": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@upstash/context7-mcp",
+        "--api-key",
+        "YOUR_API_KEY",
+        "--proxy-provider",
+        "cloudflare",
+        "--proxy-url",
+        "https://context7-proxy.<your-domain>.workers.dev",
+        "--proxy-key",
+        "YOUR_PROXY_KEY"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+You can also set env vars and avoid passing proxy flags every time:
+
+- `CONTEXT7_PROXY_PROVIDER=cloudflare`
+- `CONTEXT7_PROXY_URL=...`
+- `PROXY_KEY=...`
+- `RATE_LIMIT_ENABLED=true`
+- `RATE_LIMIT_MAX_REQUESTS=120`
+- `RATE_LIMIT_WINDOW_SECONDS=60`
+
+Upstream project reference: https://github.com/upstash/context7
+
 ## Important Tips
 
 ### Use Library Id
