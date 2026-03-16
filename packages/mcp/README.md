@@ -1405,6 +1405,11 @@ CONTEXT7_PROXY_KEY=your_proxy_or_cache_key_here
 CONTEXT7_PROXY_PROVIDER=cloudflare
 ```
 
+`context7-mcp` auto-loads `.env` and `.env.local` from the current working directory.
+You can also point to a specific file with `CONTEXT7_ENV_FILE=/path/to/file.env`.
+
+Important: if you use env-based auth, do not pass empty flags like `--api-key` or `--proxy-key` without values.
+
 The proxy key also supports `PROXY_KEY` and `CACHE_KEY` aliases for compatibility with existing setups.
 
 For a fork-friendly setup, use:

@@ -12,9 +12,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { Command } from "commander";
 import { AsyncLocalStorage } from "async_hooks";
 import { SERVER_VERSION, RESOURCE_URL, AUTH_SERVER_URL } from "./lib/constants.js";
+import { loadMcpEnv } from "./lib/env.js";
 
 /** Default HTTP server port */
 const DEFAULT_PORT = 3000;
+
+loadMcpEnv();
 
 // Parse CLI arguments using commander
 const program = new Command()
